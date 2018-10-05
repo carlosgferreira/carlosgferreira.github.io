@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Mapa para Rony</title>
+    <meta charset="utf-8" />
+	
+	<!-- Biblioteca-fonte: Leaflet-->
+    <link rel="stylesheet" href="libs/leaflet.css"/>
+	<script src="libs/leaflet.js"></script>
+	
+	<!-- Draw-->
+	<script src= "https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/0.2.3/leaflet.draw-src.js"></script>
+	<link rel="stylesheet" href= "https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/0.2.3/leaflet.draw.css">
+	<script src= "libs/leaflet.draw.js"></script>
+	
+	<!-- Slide menu-->
+	<link rel="stylesheet" href="libs/slide_menu/SlideMenu.css" />
+	<script src="libs/slide_menu/SlideMenu.js"></script>
+	<link rel="stylesheet" href="http://maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
+	
+	<!-- GeoCoder-->
+	<link rel="stylesheet" href="libs/Control.OSMGeocoder.css"/>
+	<script src="libs/Control.OSMGeocoder.js"></script>
+	
+	<!-- Overview-->
+	<link rel="stylesheet" href="libs/overview/MiniMap.css" />
+	<script src="libs/overview/MiniMap.js"></script>
+ 
+	<!-- Localisation-->
+	<link rel="stylesheet" href="libs/L.Control.Locate.min.css" />
+    <script src="libs/L.Control.Locate.js"></script>
+	
+	<!-- Mouse position-->
+	<link rel="stylesheet" href="libs/L.Control.MousePosition.css" />
+    <script src="libs/L.Control.MousePosition.js"></script>
+	
+	<!-- Navigation Bar-->
+    <link rel="stylesheet" href="libs/NavBar/NavBar.css"/>
+	<script src="libs/NavBar/NavBar.js"></script>
+	
+	<!-- Font-->
+	<link href="//maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css" rel="stylesheet">
+	
+	<!-- jquery-->
+	<script src="https://code.jquery.com/jquery-2.1.1.min.js"></script>
+
+	
+    <style>
+        body {
+            padding: 0;
+            margin: 0;
+        }
+        html, body, #map {
+            height: 100%;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <script>
+	
+		///// Fonte dos Basemaps
+		var OpenStreetMap = L.tileLayer('http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: 'Mapa-Base: &copy;<a href="https://www.openstreetmap.org/">OpenStreetMap</a>'
+        });
+		
+		var WorldImagery = L.tileLayer('http://www.google.cn/maps/vt?lyrs=s@189&gl=cn&x={x}&y={y}&z={z}', {
+            attribution: 'Imagem: &copy;<a href="http://www.esri.com">Google</a>'
+        });
+		
+		var GoogleHybrid = L.tileLayer ('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+            attribution: 'Imagem/Mapa-Base: &copy;<a href="http://www.maps.google.com">Google</a>'
+        });
+		
+		var GoogleTerrain = L.tileLayer ('https://mt1.google.com/vt/lyrs=t&x={x}&y={y}&z={z}', {
+            attribution: 'Base de informações: <b>&copy;<a href="http://www.maps.google.com">Google</a></b>'
+        });
+		
+	
+		/////Mapa	
+		var map = L.map('map', {
+				layers: [OpenStreetMap], /// Basemap inicial
+				center: [-14.28, -170.69],/// Centroide da view
+				zoom: 12	//// Zoom inicial
+			});
+		
+
+		/////Basemaps	
+		var baseLayers = {
+			"Vias": OpenStreetMap,
+			"Imagem": WorldImagery,
+			"Imagem + Vias": GoogleHybrid,
+			"Terreno": GoogleTerrain
+			
+		};
+
+		
+		///// WMSs do Geoserver
+		var Edificacoes = L.tileLayer.wms("http://geo.pacioos.hawaii.edu/geoserver/PACIOOS/wms", {
+			layers: 'PACIOOS:as_dw_aun_bldngs',
+			format: 'image/png',
+			transparent: true,
+			version: '1.0.0',
+			attribution: "Pacific Islands Ocean Observing System"
+		});
+		var Zoneamento = L.tileLayer.wms("http://geo.pacioos.hawaii.edu/geoserver/PACIOOS/wms", {
+			layers: 'PACIOOS:as_dw_aun_femafirm',
+			format: 'image/png',
+			transparent: true,
+			version: '1.0.0',
+			attribution: "Pacific Islands Ocean Observing System"
+		});
+		var Ilha1 = L.tileLayer.wms("http://geo.pacioos.hawaii.edu/geoserver/PACIOOS/wms", {
+			layers: 'PACIOOS:as_dw_aun_shore',
+			format: 'image/png',
+			transparent: true,
+			version: '1.0.0',
+			attribution: "Pacific Islands Ocean Observing System"
+		});
+		var Ilha2 = L.tileLayer.wms("http://geo.pacioos.hawaii.edu/geoserver/PACIOOS/wms", {
+			layers: 'PACIOOS:as_dw_tutaun_shore',
+			format: 'image/png',
+			transparent: true,
+			version: '1.0.0',
+			attribution: "Pacific Islands Ocean Observing System"
+		});
+
+		
+		
+		/// Popup Edificações
+		var owsrootUrl = 'http://geo.pacioos.hawaii.edu/geoserver/PACIOOS/ows';
+		var defaultParameters = {
+				service : 'WFS',
+				version : '2.0',
+				request : 'GetFeature',
+				typeName : 'PACIOOS:as_dw_aun_bldngs',
+				outputFormat : 'json',
+				format_options : 'callback:getJson',
+				SrsName : 'EPSG:4326'
+		};
+		var groupEdificacoes = new L.layerGroup();
+		var parameters = L.Util.extend(defaultParameters);
+		var URL = owsrootUrl + L.Util.getParamString(parameters);
+		var ajax = $.ajax({
+				url : URL,
+				dataType : 'json',
+				jsonpCallback : 'getJson',
+				success : function (response) {
+				L.geoJson(response, {
+						style: function (feature) {
+                               return {
+                               stroke: false,
+                               fillColor: 'FFFFFF',
+                               fillOpacity: 0
+                               };
+                        },		
+						
+						
+						onEachFeature: function (feature, url) {
+							popupOptions = {maxWidth: 250};
+							url.bindPopup("<u><b>Edificações:</b></u>" +
+							              "<br><i><b>Área(km²): </b></i> " + feature.properties.AREA +
+								          "<br><i><b>Código A: </b></i>" + feature.properties.aunuu_bld_ +
+										  "<br><i><b>Código B: </b></i>" + feature.properties.aunuu_bld___3
+								,popupOptions);
+						}
+					}).addTo(groupEdificacoes);
+				}
+		});
+		
+		var groupEdificacoes_ = L.layerGroup([ Edificacoes, groupEdificacoes ]);
+
+			/// Popup Zoneamento
+		var owsrootUrl = 'http://geo.pacioos.hawaii.edu/geoserver/PACIOOS/ows';
+		var defaultParameters = {
+				service : 'WFS',
+				version : '2.0',
+				request : 'GetFeature',
+				typeName : 'PACIOOS:as_dw_aun_femafirm',
+				outputFormat : 'json',
+				format_options : 'callback:getJson',
+				SrsName : 'EPSG:4326'
+		};
+		var groupZoneamento = new L.layerGroup();
+		var parameters = L.Util.extend(defaultParameters);
+		var URL = owsrootUrl + L.Util.getParamString(parameters);
+		var ajax = $.ajax({
+				url : URL,
+				dataType : 'json',
+				jsonpCallback : 'getJson',
+				success : function (response) {
+				L.geoJson(response, {
+				
+					style: function (feature) {
+                           return {
+                           stroke: false,
+                           fillColor: 'FFFFFF',
+                           fillOpacity: 0
+                           };
+                    },
+				
+				
+						onEachFeature: function (feature, url) {
+							popupOptions = {maxWidth: 250};
+							url.bindPopup("<u><b>Zoneamento:</b></u>" +
+							    "<br><i><b>Área(km²): </b></i> " + feature.properties.AREA +
+								"<br><i><b>Zona: </b><i>" + feature.properties.ZONE
+								,popupOptions);
+						}
+					}).addTo(groupZoneamento);
+				}
+		});
+		
+		var groupZoneamento_ = L.layerGroup([ Zoneamento, groupZoneamento ]);		
+		/// Popup Ilha1
+		var owsrootUrl = 'http://geo.pacioos.hawaii.edu/geoserver/PACIOOS/ows';
+		var defaultParameters2 = {
+				service : 'WFS',
+				version : '2.0',
+				request : 'GetFeature',
+				typeName : 'PACIOOS:as_dw_aun_shore',
+				outputFormat : 'json',
+				format_options : 'callback:getJson',
+				SrsName : 'EPSG:4326'
+		};
+		var groupIlha1 = new L.featureGroup();
+		var parameters = L.Util.extend(defaultParameters2);
+		var URL = owsrootUrl + L.Util.getParamString(parameters);
+		var ajax = $.ajax({
+				
+				url : URL,
+				dataType : 'json',
+				jsonpCallback : 'getJson',
+				success : function (response) {
+				L.geoJson(response, {
+										   
+							style: function (feature) {
+                                  return {
+                                  stroke: false,
+                                  fillColor: 'FFFFFF',
+                                  fillOpacity: 0
+                                  };
+                            },
+	
+						onEachFeature: function (feature, url) {
+							popupOptions = {maxWidth: 250};
+							url.bindPopup("<u><b>Ilhas - 1:</b></u>" +
+							    "<br><i><b>Área(km²): </b></i> " + feature.properties.AREA +
+								"<br><i><b>Perímetro(km): </b></i>" + feature.properties.PERIMETER
+								,popupOptions);
+						}
+					}).addTo(groupIlha1);
+				}
+		});	
+		
+		var groupIlha1_ = L.layerGroup([ Ilha1, groupIlha1 ]);
+
+		/// Popup Ilha2
+		var owsrootUrl = 'http://geo.pacioos.hawaii.edu/geoserver/PACIOOS/ows';
+		var defaultParameters2 = {
+				service : 'WFS',
+				version : '2.0',
+				request : 'GetFeature',
+				typeName : 'PACIOOS:as_dw_tutaun_shore',
+				outputFormat : 'json',
+				format_options : 'callback:getJson',
+				SrsName : 'EPSG:4326',
+				color: 'orange'
+		};
+		var groupIlha2 = new L.featureGroup();
+		var parameters = L.Util.extend(defaultParameters2);
+		var URL = owsrootUrl + L.Util.getParamString(parameters);
+		var ajax = $.ajax({
+				url : URL,
+				dataType : 'json',
+				jsonpCallback : 'getJson',
+				success : function (response) {
+				L.geoJson(response, {
+						   style: function (feature) {
+                                  return {
+                    stroke: false,
+                    fillColor: 'FFFFFF',
+                    fillOpacity: 0
+                };
+            },
+						onEachFeature: function (feature, url) {
+							popupOptions = {maxWidth: 250};
+							url.bindPopup("<u><b>Ilhas - 2:</b></u>" +
+							    "<br><i><b>Área km²: </b></i> " + feature.properties.AREA +
+								"<br><i><b>Perímetro (km): </b></i>" + feature.properties.PERIMETER 
+								,popupOptions);
+						}
+					}).addTo(groupIlha2);
+				}
+		});	
+		
+		var groupIlha2_ = L.layerGroup([ Ilha2, groupIlha2 ]);
+
+						  
+		///// Groupe layers
+		var overlays = {
+			
+			"Edificações": groupEdificacoes_,
+			"Zoneamento": groupZoneamento_,
+			"Ilhas - 1": groupIlha1_,
+			"Ilhas - 2": groupIlha2_
+								
+
+		};
+		
+		
+		//// Add the Find to the map 
+		var osmGeocoder = new L.Control.OSMGeocoder();
+        map.addControl(osmGeocoder);
+				
+		///// Add the Overview to the map 
+        var osm2 = L.tileLayer('http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
+		var miniMap = new L.Control.MiniMap(osm2, { toggleDisplay: true }).addTo(map);
+		
+		///// Add the scale control to the map
+		L.control.scale().addTo(map);
+			
+		///// Add the Navigation Bar to the map 
+		L.control.navbar({position: 'topleft'}).addTo(map);
+			
+		
+		///// Add the geolocate control to the map
+		L.control.locate().addTo(map);
+		
+		///// Add the mouse position to the map 
+		L.control.mousePosition().addTo(map);
+		
+		///// Add the draw feature to the map
+		var drawnItems = new L.FeatureGroup();
+		map.addLayer(drawnItems);
+
+		///// config draw feature
+		var drawControl = new L.Control.Draw({
+			position: 'topleft',
+			draw: {
+				polygon: {
+					shapeOptions: {color: 'purple'},
+					allowIntersection: false,
+					drawError: {color: 'orange',timeout: 1000},
+					showArea: true,
+					metric: false,
+					repeatMode: true
+				},
+				polyline: {
+					shapeOptions: {color: 'red'},
+				},
+				rect: {
+					shapeOptions: {color: 'green'},
+				},
+				circle: {
+					shapeOptions: {color: 'steelblue'},
+				},
+				marker: true
+				},
+						edit: {
+						  featureGroup: drawnItems,
+						  remove: true
+					}
+				});
+		map.addControl(drawControl);
+		map.on('draw:created', function (e) {
+			var type = e.layerType,
+				layer = e.layer;
+			drawnItems.addLayer(layer);
+		});
+		
+		
+		/////////// legenda (slide menu)
+		var div = L.DomUtil.create('div', 'info-legend');	
+			var legenda1 = 'Edificações';
+			contents1 = div.innerHTML = '<br><img src="http://geo.pacioos.hawaii.edu/geoserver/PACIOOS/wms?REQUEST=GetLegendGraphic&VERSION=1.0.0&FORMAT=image/png&WIDTH=20&HEIGHT=20&LAYER=PACIOOS:as_dw_aun_bldngs" </img><br>';
+			
+			var legenda2 = 'Zoneamento';
+			contents2 = div.innerHTML = '<br><img src="http://geo.pacioos.hawaii.edu/geoserver/PACIOOS/wms?REQUEST=GetLegendGraphic&VERSION=1.0.0&FORMAT=image/png&WIDTH=20&HEIGHT=20&LAYER=PACIOOS:as_dw_aun_femafirm" </img><br>';
+
+			var legenda3 = 'Ilha1';
+			contents3 = div.innerHTML = '<br><img src="http://geo.pacioos.hawaii.edu/geoserver/PACIOOS/wms?REQUEST=GetLegendGraphic&VERSION=1.0.0&FORMAT=image/png&WIDTH=20&HEIGHT=20&LAYER=PACIOOS:as_dw_aun_shore" </img><br>';
+			
+			var legenda4 = 'Ilha2';
+			contents4 = div.innerHTML = '<br><img src="http://geo.pacioos.hawaii.edu/geoserver/PACIOOS/wms?REQUEST=GetLegendGraphic&VERSION=1.0.0&FORMAT=image/png&WIDTH=20&HEIGHT=20&LAYER=PACIOOS:as_dw_tutaun_shore" </img><br>';
+			
+			
+			var slideMenu = L.control.slideMenu('', {position: 'topright', delay: '5'}).addTo(map);
+			slideMenu.setContents(legenda1 + contents1 + legenda2 + contents2 + legenda3 + contents3 + legenda4 + contents4 );
+		
+		///// Camadas do mapa e Basemaps
+		L.control.layers(baseLayers,overlays).addTo(map);
+
+
+			
+			
+			
+
+    </script>
+	<script type="text/javascript">
+		//Analytics
+			var _gaq = _gaq || [];
+			_gaq.push(['_setAccount', 'UA-36489204-2']);
+			_gaq.push(['_trackPageview']);	  
+			(function() {
+			  var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+			  ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+			  var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+			})();
+		</script>
+	
+</body>
+</html>
